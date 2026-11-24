@@ -18,7 +18,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .scheduler import KINDS, Scheduler
+from .scheduler import KINDS, ResetError, Scheduler
 from .sources import ensure_sources
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "./data")).resolve()
@@ -60,7 +60,11 @@ async def start(kind: str, simulate_fail: bool = False):
 async def reset(kind: str):
     _check(kind)
     try:
-        job = sched.reset(kind)
+        # reset 为协程：内部持每任务锁，并把同步磁盘 IO 放到线程池，不阻塞事件循环
+        job = await sched.reset(kind)
+    except ResetError as e:
+        # 清空失败：瓦片与进度原样保留，前端明确报错，故障排除后可重试
+        raise HTTPException(500, str(e))
     except RuntimeError as e:
         raise HTTPException(409, str(e))
     return {"ok": True, "job": job.snapshot()}

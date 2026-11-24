@@ -37,8 +37,16 @@ for (const k of KINDS) cells[k] = buildGrid(k);
 async function post(url) {
   const r = await fetch(url, { method: "POST" });
   if (!r.ok) {
-    const t = await r.text();
-    alert(`操作被拒绝：${r.status} ${t}`);
+    let msg = r.statusText;
+    try {
+      const body = await r.json();
+      if (body && body.detail) msg = body.detail;
+    } catch (e) {
+      const t = await r.text().catch(() => "");
+      if (t) msg = t;
+    }
+    const act = url.includes("/reset") ? "重置失败" : "操作被拒绝";
+    alert(`${act}：HTTP ${r.status}\n${msg}\n（瓦片与进度未改动，可排除故障后重试）`);
   }
   poll();
 }
